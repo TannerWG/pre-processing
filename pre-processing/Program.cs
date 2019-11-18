@@ -9,6 +9,7 @@ using System.Drawing;
 using System.Text.RegularExpressions;
 using System.IO;
 using System.Threading;
+using System.Diagnostics;
 
 using ESRI.ArcGIS;
 using ESRI.ArcGIS.esriSystem;
@@ -39,36 +40,113 @@ namespace pre_processing
             ESRI.ArcGIS.RuntimeManager.Bind(ESRI.ArcGIS.ProductCode.EngineOrDesktop);
             AoInitializeFirst();
 
-            string inPath = "E:\\桌面\\道路平行性判断\\CityShapeFile\\#test\\hk_island_spf.shp";
-            string dir = System.IO.Path.GetDirectoryName(inPath); //可以获得不带文件名的路径
-            string name = System.IO.Path.GetFileNameWithoutExtension(inPath); //可以获得文件名
-            string outPath = dir + "\\" + name + "_spf.shp";
-            Console.WriteLine("inPath: " + inPath);
-            Console.WriteLine("outPath: " + outPath);
+            if (false) //批量处理
+            {
+                DirectoryInfo di = new DirectoryInfo(@"E:\\桌面\\道路平行性判断\\CityShapeFile"); //获取文件夹
+                DirectoryInfo[] dis = di.GetDirectories(); //获得文件夹内的所有文件夹
+                for (int i = 0; i < dis.Length; i++) //遍历文件夹
+                {
+                    string inPath = dis[i].FullName + "\\highway.shp"; //获取文件夹下面的文件highway.shp
+                    if (!File.Exists(inPath)) continue; //不存在文件hiway.shp，跳过
+                    Console.WriteLine("正在处理：" + "[" + i + "] " + dis[i].Name);
+                    //计时
+                    Stopwatch sw = new Stopwatch();
+                    sw.Start();
 
-            IFeatureClass outFeatClass = CopyFeatureClass(inPath, outPath); //拷贝要素类
+                    //string inPath = "E:\\桌面\\道路平行性判断\\CityShapeFile\\#test\\hk_island_spf.shp";
+                    string dir = System.IO.Path.GetDirectoryName(inPath); //可以获得不带文件名的路径
+                    string name = System.IO.Path.GetFileNameWithoutExtension(inPath); //可以获得文件名
+                    string outPath = dir + "\\" + name + "_spf.shp";
 
-            roadTypeIndex = QueryFieldIndex(outFeatClass, "highway");
-            int linkIndex = AddField(outFeatClass, "link", esriFieldType.esriFieldTypeSmallInteger, 1);
+                    IFeatureClass outFeatClass = CopyFeatureClass(inPath, outPath); //拷贝要素类
 
-            //打开编辑器
-            IWorkspaceFactory workspaceFactory = new ShapefileWorkspaceFactoryClass();
-            IWorkspace workspace = workspaceFactory.OpenFromFile(System.IO.Path.GetDirectoryName(inPath), 0);
-            IWorkspaceEdit workspaceEdit = workspace as IWorkspaceEdit;
-            workspaceEdit.StartEditing(true);
-            workspaceEdit.StartEditOperation();
+                    roadTypeIndex = QueryFieldIndex(outFeatClass, "highway");
+                    int linkIndex = AddField(outFeatClass, "link", esriFieldType.esriFieldTypeSmallInteger, 1);
 
-            ////按类型删除
-            //DeleteFeatureByRoadType(outFeatClass);
-            ////为link做标记
-            //UpdateTagField(outFeatClass, linkIndex);
-            ////删除link道路
+                    //打开编辑器
+                    IWorkspaceFactory workspaceFactory = new ShapefileWorkspaceFactoryClass();
+                    IWorkspace workspace = workspaceFactory.OpenFromFile(System.IO.Path.GetDirectoryName(inPath), 0);
+                    IWorkspaceEdit workspaceEdit = workspace as IWorkspaceEdit;
+                    workspaceEdit.StartEditing(true);
+                    workspaceEdit.StartEditOperation();
 
-            RemoveLinkRoad(outFeatClass);
+                    //按类型删除
+                    DeleteFeatureByRoadType(outFeatClass);
+                    //为link做标记
+                    UpdateTagField(outFeatClass, linkIndex);
+                    //删除link道路
+                    RemoveLinkRoad(outFeatClass);
 
-            //停止编辑状态
-            workspaceEdit.StopEditOperation();
-            workspaceEdit.StopEditing(true);
+                    //停止编辑状态
+                    workspaceEdit.StopEditOperation();
+                    workspaceEdit.StopEditing(true);
+
+                    //停止计时，输出结果
+                    sw.Stop();
+                    int featCount = outFeatClass.FeatureCount(null);
+                    Console.WriteLine("处理完毕：" + "[" + i + "] " + dis[i].Name + "  规模：" + featCount + "  用时：" + sw.Elapsed.TotalMinutes + "Min");
+
+                }
+                Console.ReadKey();
+            }
+            else
+            {
+                string inPath = "E:\\桌面\\道路平行性判断\\CityShapeFile\\Hongkong\\highway.shp"; 
+                //计时
+                Stopwatch sw = new Stopwatch();
+                sw.Start();
+
+                //string inPath = "E:\\桌面\\道路平行性判断\\CityShapeFile\\#test\\hk_island_spf.shp";
+                string dir = System.IO.Path.GetDirectoryName(inPath); //可以获得不带文件名的路径
+                string name = System.IO.Path.GetFileNameWithoutExtension(inPath); //可以获得文件名
+                string linkPath = dir + "\\" + name + "_link.shp";
+                string spfPath = dir + "\\" + name + "_spf.shp";
+
+                IFeatureClass linkFeatClass = CopyFeatureClass(inPath, linkPath); //拷贝要素类
+
+                roadTypeIndex = QueryFieldIndex(linkFeatClass, "highway");
+                int linkIndex = AddField(linkFeatClass, "link", esriFieldType.esriFieldTypeSmallInteger, 1);
+
+                //打开编辑器
+                IWorkspaceFactory workspaceFactory = new ShapefileWorkspaceFactoryClass();
+                IWorkspace workspace = workspaceFactory.OpenFromFile(System.IO.Path.GetDirectoryName(linkPath), 0);
+                IWorkspaceEdit workspaceEdit = workspace as IWorkspaceEdit;
+                workspaceEdit.StartEditing(true);
+                workspaceEdit.StartEditOperation();
+
+                //按类型删除
+                DeleteFeatureByRoadType(linkFeatClass);
+                //为link做标记
+                UpdateTagField(linkFeatClass, linkIndex);
+
+                //停止编辑状态
+                workspaceEdit.StopEditOperation();
+                workspaceEdit.StopEditing(true);
+
+                //复制图层
+                IFeatureClass spfFeatClass = CopyFeatureClass(linkPath, spfPath); //拷贝要素类
+
+                //打开编辑器
+                workspaceFactory = new ShapefileWorkspaceFactoryClass();
+                workspace = workspaceFactory.OpenFromFile(System.IO.Path.GetDirectoryName(spfPath), 0);
+                workspaceEdit = workspace as IWorkspaceEdit;
+                workspaceEdit.StartEditing(true);
+                workspaceEdit.StartEditOperation();
+
+                //删除link道路
+                RemoveLinkRoad(spfFeatClass);
+
+                //停止编辑状态
+                workspaceEdit.StopEditOperation();
+                workspaceEdit.StopEditing(true);
+
+                //停止计时，输出结果
+                sw.Stop();
+                int featCount = linkFeatClass.FeatureCount(null);
+                Console.WriteLine("规模：" + linkFeatClass.FeatureCount(null) + "  用时：" + Math.Round(sw.Elapsed.TotalMinutes, 2) + "Min");
+                Console.ReadKey();
+            }
+            
         }
 
         /// <summary>
@@ -287,16 +365,11 @@ namespace pre_processing
             int featCout = featClass.FeatureCount(queryFilter);
             List<int> visited = new List<int>(); //已访问的要素
 
-            //List<int> a = new List<int>() { 523, 530 };
             IFeature linkFeatrue = null;
             while ((linkFeatrue = searchCursor.NextFeature()) != null)
             {
-                //if (a.Contains(linkFeatrue.OID))
-                //{
-                //    Console.WriteLine();
-                //}
                 if (visited.Contains(linkFeatrue.OID)) continue;
-                visited.Add(linkFeatrue.OID);
+                //visited.Add(linkFeatrue.OID);
                 Console.WriteLine("删除连接道路：" + visited.Count + "/" + featCout);
                 //左右延伸寻找stroke，并删除该stroke中的所有要素
                 DeleteFeatureByStrokeTouching(linkFeatrue, featClass, ref visited);
@@ -316,19 +389,26 @@ namespace pre_processing
             List<int> strokeFeature = new List<int>() { feature.OID }; //存储一段stroke的要素
             //List<int> fea_id = new List<int>() { Convert.ToInt32(feature.get_Value(id_index))}; //存储一段stroke的要素
 
-            int fromStateCode = 3; //from端状态码：0代表真断头，1表示假断头，2代表连接到主要道路，3代表示连接到连接到_link
-            int toStateCode = 3; //to端状态码：0代表真断头，1表示假断头，2代表连接到主要道路，3代表示连接到连接到_link
+            //状态码：0（不接触），1(延申到_link)，2（延申到唯一的_main），3（其它）
+            int fsc = 1;
+            int tsc = 1;
+
+            List<int> lst = new List<int>() { 18, 23, 5 };
+            if (lst.Contains(feature.OID))
+            {
+                Console.WriteLine();
+            }
 
             //沿着feature的polyline前后寻找link道路，将其存储在strokeFeature中，这些道路组合成stroke，
             //如果stroke的两端存在与非link道路的接触，则保留，否则删除
             Posi currExp = Posi.FROM; //延申端
             while (true)
             {
-                if (fromStateCode != 3) break; //两边都无法通行，则退出
+                if (fsc != 1) break; //两边都无法通行，则退出
 
                 int bestPolyID = -1; Posi nextExp = Posi.NONE;
-                fromStateCode = EveryBestFit(strokeFeature[0], currExp, featClass, visited, out bestPolyID, out nextExp); //寻找from端的最佳延申延申段
-                if(fromStateCode == 3)
+                fsc = EveryBestFit(strokeFeature[0], currExp, featClass, visited, out bestPolyID, out nextExp); //寻找from端的最佳延申延申段
+                if (fsc == 1)
                 {
                     strokeFeature.Insert(0, bestPolyID);
                     visited.Add(bestPolyID);
@@ -338,19 +418,19 @@ namespace pre_processing
             }
 
             currExp = Posi.TO; //延申端
-            while(true)
+            while (true)
             {
-                if (toStateCode != 3) break; //两边都无法通行，则退出
+                if (tsc != 1) break; //两边都无法通行，则退出
 
                 int bestPolyID = -1; Posi nextExp = Posi.NONE;
-                toStateCode = EveryBestFit(strokeFeature[strokeFeature.Count - 1], currExp, featClass, visited, out bestPolyID, out nextExp); //寻找from端的最佳延申延申段
-                if (toStateCode == 3) //无法延申下去
+                tsc = EveryBestFit(strokeFeature[strokeFeature.Count - 1], currExp, featClass, visited, out bestPolyID, out nextExp); //寻找from端的最佳延申延申段
+                if (tsc == 1) //延申下去
                 {
                     strokeFeature.Add(bestPolyID);
                     visited.Add(bestPolyID);
                     currExp = nextExp;
                     //fea_id.Insert(0, Convert.ToInt32(bestFeature.get_Value(id_index)));
-                } 
+                }
             }
 
             //输出strokeFeature
@@ -360,14 +440,13 @@ namespace pre_processing
             //    Console.Write(id + " ");
             //}
             //Console.WriteLine();
-            
+
             //删除stroke的条件：任何一端是友好连接的都保留
-            if (fromStateCode == 0 || toStateCode == 0) //任何一端真断头都得删除
+            if ((fsc == 0 || tsc == 0) || (fsc != 2 && tsc != 2))
+            {
                 foreach (int oid in strokeFeature) //删除stroke的构成元素
                     featClass.GetFeature(oid).Delete();
-            else if(fromStateCode == 1 && toStateCode == 1) //两端假断头也得删除
-                foreach (int oid in strokeFeature) //删除stroke的构成元素
-                    featClass.GetFeature(oid).Delete();
+            }
 
             strokeFeature.Clear();
         }
@@ -384,7 +463,7 @@ namespace pre_processing
         static private int EveryBestFit(int polyID, Posi currExp, IFeatureClass featureClass, List<int> visited, out int bestPolyID, out Posi nextExp)
         {
             bestPolyID = -1; nextExp = Posi.NONE;
-            Boolean bMain = false; //表示该接触点有主要道路
+            int mainCount = 0; //表示该接触点有主要道路
             IFeature feature = featureClass.GetFeature(polyID);
             //临边查询
             ISpatialFilter sf = new SpatialFilterClass();
@@ -399,21 +478,22 @@ namespace pre_processing
             while ((fea = fc.NextFeature()) != null)
             {
                 if (fea.OID != polyID) polySet.Add(fea.OID);
-                if (!bMain && !IsLink(fea, featureClass)) bMain = true;
+                if (!IsLink(fea, featureClass)) mainCount++;
             }
 
             if (polySet.Count == 0) // 无邻接边
                 return 0;
             else if (polySet.Count == 1) //唯一邻接边
             {
-                if (visited.Contains(polySet[0])) return 0; //唯一连接路段已名花有主
+                if (visited.Contains(polySet[0])) //唯一连接路段已名花有主
+                    return 0;
 
                 bestPolyID = polySet[0];
                 Posi rel = GetRel(bestPolyID, polyID, featureClass);
                 if (rel == Posi.FROM) nextExp = Posi.TO;
                 else if (rel == Posi.TO) nextExp = Posi.FROM;
                 else Console.WriteLine("拓扑出错：[ " + polyID + ", " + bestPolyID + " ]");
-                if (IsLink(bestPolyID, featureClass)) return 3;
+                if (IsLink(bestPolyID, featureClass)) return 1;
                 else return 2;
             }
             else
@@ -429,9 +509,9 @@ namespace pre_processing
                         cddId = id;
                     }
                 }
+
                 if (visited.Contains(cddId)) //候选段已名花有主
-                    if (bMain) return 1;
-                    else return 0;
+                    return 0;
 
                 //寻找最佳匹配段的最佳匹配
                 polySet.Add(polyID);
@@ -449,20 +529,82 @@ namespace pre_processing
 
                 if (maxId == polyID) //配对成功
                 {
-                    if (!IsLink(cddId, featureClass)) return 2; //主要道路
+                    if (!IsLink(cddId, featureClass)) //主要道路
+                        if (mainCount == 1) return 2;
+                        else return 3;
+
                     bestPolyID = cddId;
                     Posi rel = GetRel(bestPolyID, polyID, featureClass);
                     if (rel == Posi.FROM) nextExp = Posi.TO;
                     else if (rel == Posi.TO) nextExp = Posi.FROM;
                     else Console.WriteLine("拓扑出错：[ " + polyID + ", " + bestPolyID + " ]");
-                    return 3;
+                    return 1;
                 }
-                else //配对不成功
+                else return 3; //配对不成功
+            }
+        }
+
+        static private int SelfBestFit(int polyID, Posi currExp, IFeatureClass featureClass, out int bestPolyID, out Posi nextExp)
+        {
+            bestPolyID = -1; nextExp = Posi.NONE;
+            int mainCount = 0; //主要道路计数
+            IFeature feature = featureClass.GetFeature(polyID);
+            //临边查询
+            ISpatialFilter sf = new SpatialFilterClass();
+            sf.GeometryField = "SHAPE";
+            sf.SpatialRel = esriSpatialRelEnum.esriSpatialRelTouches;
+            if (currExp == Posi.FROM) sf.Geometry = (feature.ShapeCopy as IPolyline).FromPoint;
+            else if (currExp == Posi.TO) sf.Geometry = (feature.ShapeCopy as IPolyline).ToPoint;
+            IFeatureCursor fc = featureClass.Search(sf, false);
+
+            List<int> polySet = new List<int>(); //所有邻接要素的OID
+            IFeature fea = null;
+            while ((fea = fc.NextFeature()) != null)
+            {
+                if (fea.OID != polyID) polySet.Add(fea.OID);
+                if (!IsLink(fea, featureClass)) mainCount++;
+            }
+
+            if (polySet.Count == 0) // 无邻接边
+                return 0;
+            else if (polySet.Count == 1) //唯一邻接边
+            {
+                if (!IsLink(polySet[0], featureClass)) 
+                    return 2;
+                bestPolyID = polySet[0];
+                Posi rel = GetRel(bestPolyID, polyID, featureClass);
+                if (rel == Posi.FROM) nextExp = Posi.TO;
+                else if (rel == Posi.TO) nextExp = Posi.FROM;
+                else Console.WriteLine("拓扑出错：[ " + polyID + ", " + bestPolyID + " ]");
+                return 1;
+            }
+            else
+            {
+                //寻找最匹配段
+                double maxAngle = 0; int cddId = -1;
+                foreach (int id in polySet)
                 {
-                    if (!IsLink(cddId, featureClass) && IsLink(maxId, featureClass)) return 2;
-                    else
-                        if (bMain) return 1;
-                        else return 0;
+                    double angle = GetPolylineAngle(polyID, id, featureClass);
+                    if (angle > maxAngle)
+                    {
+                        maxAngle = angle;
+                        cddId = id;
+                    }
+                }
+
+                if (IsLink(cddId, featureClass)) //候选段是_link
+                {
+                    bestPolyID = cddId;
+                    Posi rel = GetRel(bestPolyID, polyID, featureClass);
+                    if (rel == Posi.FROM) nextExp = Posi.TO;
+                    else if (rel == Posi.TO) nextExp = Posi.FROM;
+                    else Console.WriteLine("拓扑出错：[ " + polyID + ", " + bestPolyID + " ]");
+                    return 1;
+                }
+                else //候选段是_main
+                {
+                    if (mainCount == 1) return 2;
+                    else return 3;
                 }
             }
         }
