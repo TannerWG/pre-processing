@@ -23,6 +23,7 @@ using ESRI.ArcGIS.Geometry;
 namespace pre_processing
 {
     public enum Posi { NONE, FROM, TO, BOTH};
+    public enum Strategy { Tree, Stroke};
     class Program
     {
         static AoInitialize m_AoInitialize;
@@ -40,122 +41,134 @@ namespace pre_processing
             ESRI.ArcGIS.RuntimeManager.Bind(ESRI.ArcGIS.ProductCode.EngineOrDesktop);
             AoInitializeFirst();
 
-            Boolean bTree = true; //是否采取树策略，否则，采取Stroke策略
+            string inPath = "E:\\桌面\\道路平行性判断\\CityShapeFile\\Hongkong\\highway.shp";
+            RemoveRoadByType(inPath);
+            RemoveLink(inPath, Strategy.Tree);
+            RemoveLink(inPath, Strategy.Stroke);
+            //DeleteLinkLayer(inPath);
+        }
 
-            if (false) //批量处理
+        /// <summary>
+        /// 按类型删除线段
+        /// <summary>
+        /// <param name="path">shp文件路径</param>
+        static private void RemoveRoadByType(string inPath)
+        {
+            //计时
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+
+            //string inPath = "E:\\桌面\\道路平行性判断\\CityShapeFile\\#test\\hk_island_spf.shp";
+            string dir = System.IO.Path.GetDirectoryName(inPath); //可以获得不带文件名的路径
+            string name = System.IO.Path.GetFileNameWithoutExtension(inPath); //可以获得文件名
+            string linkPath = dir + "\\" + name + "_link.shp";
+
+
+            Console.WriteLine("inPath: " + inPath);
+            Console.WriteLine("linkPath: " + linkPath);
+
+            IFeatureClass linkFeatClass = CopyFeatureClass(inPath, linkPath); //拷贝要素类
+
+            roadTypeIndex = QueryFieldIndex(linkFeatClass, "highway");
+            linkIndex = AddField(linkFeatClass, "link", esriFieldType.esriFieldTypeSmallInteger, 1);
+
+            //打开编辑器
+            IWorkspaceFactory workspaceFactory = new ShapefileWorkspaceFactoryClass();
+            IWorkspace workspace = workspaceFactory.OpenFromFile(System.IO.Path.GetDirectoryName(linkPath), 0);
+            IWorkspaceEdit workspaceEdit = workspace as IWorkspaceEdit;
+            workspaceEdit.StartEditing(true);
+            workspaceEdit.StartEditOperation();
+
+            //按类型删除
+            DeleteFeatureByRoadType(linkFeatClass);
+            //为link做标记
+            UpdateTagField(linkFeatClass, linkIndex);
+
+            //停止编辑状态
+            workspaceEdit.StopEditOperation();
+            workspaceEdit.StopEditing(true);
+
+            //停止计时，输出结果
+            sw.Stop();
+            int featCount = linkFeatClass.FeatureCount(null);
+            Console.WriteLine("规模：" + linkFeatClass.FeatureCount(null) + "  用时：" + Math.Round(sw.Elapsed.TotalMinutes, 2) + "Min");
+        }
+
+        /// <summary>
+        /// 数据预处理程序（按类型删除->添加link字段->删除link）
+        /// <summary>
+        /// <param name="path">shp文件路径</param>
+        /// <param name="strategy">策略（Tree或Stroke）</param>
+        static private void RemoveLink(string inPath, Strategy strategy)
+        {
+            //计时
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+
+            //string inPath = "E:\\桌面\\道路平行性判断\\CityShapeFile\\#test\\hk_island_spf.shp";
+            string dir = System.IO.Path.GetDirectoryName(inPath); //可以获得不带文件名的路径
+            string name = System.IO.Path.GetFileNameWithoutExtension(inPath); //可以获得文件名
+            string linkPath = dir + "\\" + name + "_link.shp";
+            string spfPath = null;
+            if (strategy == Strategy.Tree)
+                spfPath = dir + "\\" + name + "_spf(Tree).shp";
+            else if(strategy == Strategy.Stroke)
+                spfPath = dir + "\\" + name + "_spf(Stroke).shp";
+
+            Console.WriteLine("linkPath: " + inPath);
+            Console.WriteLine("spfPath: " + spfPath);
+
+            IFeatureClass spfFeatClass = CopyFeatureClass(linkPath, spfPath); //拷贝要素类
+
+            roadTypeIndex = QueryFieldIndex(spfFeatClass, "highway");
+            linkIndex = AddField(spfFeatClass, "link", esriFieldType.esriFieldTypeSmallInteger, 1);
+
+            //打开编辑器
+            IWorkspaceFactory workspaceFactory = new ShapefileWorkspaceFactoryClass();
+            IWorkspace workspace = workspaceFactory.OpenFromFile(System.IO.Path.GetDirectoryName(inPath), 0);
+            IWorkspaceEdit workspaceEdit = workspace as IWorkspaceEdit;
+            workspaceEdit.StartEditing(true);
+            workspaceEdit.StartEditOperation();
+
+            //删除link道路
+            if (strategy == Strategy.Tree)
+                RemoveLinkRoad_Tree(spfFeatClass);
+            else if(strategy == Strategy.Stroke)
+                RemoveLinkRoad_Stroke(spfFeatClass);
+
+            //停止编辑状态
+            workspaceEdit.StopEditOperation();
+            workspaceEdit.StopEditing(true);
+
+            //停止计时，输出结果
+            sw.Stop();
+            int featCount = spfFeatClass.FeatureCount(null);
+            Console.WriteLine("规模：" + spfFeatClass.FeatureCount(null) + "  用时：" + Math.Round(sw.Elapsed.TotalMinutes, 2) + "Min");
+        }
+
+        /// <summary>
+        /// 删除_link图层
+        /// <summary>
+        /// <param name="path">shp文件路径</param>
+        static private void DeleteLinkLayer(string inPath)
+        {
+            string dir = System.IO.Path.GetDirectoryName(inPath); //可以获得不带文件名的路径
+            string name = System.IO.Path.GetFileNameWithoutExtension(inPath); //可以获得文件名
+            string linkPath = dir + "\\" + name + "_link.shp";
+
+            if (File.Exists(linkPath)) //存在该路径，则在文件夹中找到文件并删除
             {
-                DirectoryInfo di = new DirectoryInfo(@"E:\\桌面\\道路平行性判断\\CityShapeFile"); //获取文件夹
-                DirectoryInfo[] dis = di.GetDirectories(); //获得文件夹内的所有文件夹
-                for (int i = 0; i < dis.Length; i++) //遍历文件夹
+                string fileName = System.IO.Path.GetFileNameWithoutExtension(linkPath); //文件名称
+                DirectoryInfo root = new DirectoryInfo(dir);
+                foreach (FileInfo f in root.GetFiles())
                 {
-                    string inPath = dis[i].FullName + "\\highway.shp"; //获取文件夹下面的文件highway.shp
-                    if (!File.Exists(inPath)) continue; //不存在文件hiway.shp，跳过
-                    Console.WriteLine("正在处理：" + "[" + i + "] " + dis[i].Name);
-                    //计时
-                    Stopwatch sw = new Stopwatch();
-                    sw.Start();
-
-                    //string inPath = "E:\\桌面\\道路平行性判断\\CityShapeFile\\#test\\hk_island_spf.shp";
-                    string dir = System.IO.Path.GetDirectoryName(inPath); //可以获得不带文件名的路径
-                    string name = System.IO.Path.GetFileNameWithoutExtension(inPath); //可以获得文件名
-                    string outPath = dir + "\\" + name + "_spf.shp";
-
-                    IFeatureClass outFeatClass = CopyFeatureClass(inPath, outPath); //拷贝要素类
-
-                    roadTypeIndex = QueryFieldIndex(outFeatClass, "highway");
-                    linkIndex = AddField(outFeatClass, "link", esriFieldType.esriFieldTypeSmallInteger, 1);
-
-                    //打开编辑器
-                    IWorkspaceFactory workspaceFactory = new ShapefileWorkspaceFactoryClass();
-                    IWorkspace workspace = workspaceFactory.OpenFromFile(System.IO.Path.GetDirectoryName(inPath), 0);
-                    IWorkspaceEdit workspaceEdit = workspace as IWorkspaceEdit;
-                    workspaceEdit.StartEditing(true);
-                    workspaceEdit.StartEditOperation();
-
-                    //按类型删除
-                    DeleteFeatureByRoadType(outFeatClass);
-                    //为link做标记
-                    UpdateTagField(outFeatClass, linkIndex);
-                    //删除link道路
-                    if(bTree)
-                        RemoveLinkRoad_Tree(outFeatClass);
-                    else
-                        RemoveLinkRoad_Stroke(outFeatClass);
-
-                    //停止编辑状态
-                    workspaceEdit.StopEditOperation();
-                    workspaceEdit.StopEditing(true);
-
-                    //停止计时，输出结果
-                    sw.Stop();
-                    int featCount = outFeatClass.FeatureCount(null);
-                    Console.WriteLine("处理完毕：" + "[" + i + "] " + dis[i].Name + "  规模：" + featCount + "  用时：" + sw.Elapsed.TotalMinutes + "Min");
-
+                    if (f.Name.Split('.')[0] == fileName)
+                    {
+                        string filepath = f.FullName;
+                        File.Delete(filepath);
+                    }
                 }
-                Console.ReadKey();
             }
-            else
-            {
-                string inPath = "E:\\桌面\\道路平行性判断\\CityShapeFile\\Hongkong\\highway.shp";
-                //计时
-                Stopwatch sw = new Stopwatch();
-                sw.Start();
-
-                //string inPath = "E:\\桌面\\道路平行性判断\\CityShapeFile\\#test\\hk_island_spf.shp";
-                string dir = System.IO.Path.GetDirectoryName(inPath); //可以获得不带文件名的路径
-                string name = System.IO.Path.GetFileNameWithoutExtension(inPath); //可以获得文件名
-                string linkPath = dir + "\\" + name + "_link.shp";
-                string spfPath = dir + "\\" + name + "_spf.shp";
-
-                IFeatureClass linkFeatClass = CopyFeatureClass(inPath, linkPath); //拷贝要素类
-                //IFeatureClass linkFeatClass = OpenFeatClass(linkPath);
-
-                roadTypeIndex = QueryFieldIndex(linkFeatClass, "highway");
-                linkIndex = AddField(linkFeatClass, "link", esriFieldType.esriFieldTypeSmallInteger, 1);
-
-                //打开编辑器
-                IWorkspaceFactory workspaceFactory = new ShapefileWorkspaceFactoryClass();
-                IWorkspace workspace = workspaceFactory.OpenFromFile(System.IO.Path.GetDirectoryName(linkPath), 0);
-                IWorkspaceEdit workspaceEdit = workspace as IWorkspaceEdit;
-                workspaceEdit.StartEditing(true);
-                workspaceEdit.StartEditOperation();
-
-                //按类型删除
-                DeleteFeatureByRoadType(linkFeatClass);
-                //为link做标记
-                UpdateTagField(linkFeatClass, linkIndex);
-
-                //停止编辑状态
-                workspaceEdit.StopEditOperation();
-                workspaceEdit.StopEditing(true);
-
-                //复制图层
-                IFeatureClass spfFeatClass = CopyFeatureClass(linkPath, spfPath); //拷贝要素类
-
-                //打开编辑器
-                workspaceFactory = new ShapefileWorkspaceFactoryClass();
-                workspace = workspaceFactory.OpenFromFile(System.IO.Path.GetDirectoryName(spfPath), 0);
-                workspaceEdit = workspace as IWorkspaceEdit;
-                workspaceEdit.StartEditing(true);
-                workspaceEdit.StartEditOperation();
-
-                //删除link道路
-                if (bTree)
-                    RemoveLinkRoad_Tree(spfFeatClass);
-                else
-                    RemoveLinkRoad_Stroke(spfFeatClass);
-
-                //停止编辑状态
-                workspaceEdit.StopEditOperation();
-                workspaceEdit.StopEditing(true);
-
-                //停止计时，输出结果
-                sw.Stop();
-                int featCount = spfFeatClass.FeatureCount(null);
-                Console.WriteLine("规模：" + spfFeatClass.FeatureCount(null) + "  用时：" + Math.Round(sw.Elapsed.TotalMinutes, 2) + "Min");
-                Console.ReadKey();
-            }
-            
         }
 
         /// <summary>
@@ -280,7 +293,6 @@ namespace pre_processing
             while ((linkFeatrue = searchCursor.NextFeature()) != null)
             {
                 if (visited.Contains(linkFeatrue.OID)) continue;
-                //visited.Add(linkFeatrue.OID);
                 Console.WriteLine("删除连接道路：" + visited.Count + "/" + featCout);
                 //左右延伸寻找stroke，并删除该stroke中的所有要素
                 DeleteFeatureByStrokeTouching(linkFeatrue, featClass, ref visited);
@@ -303,12 +315,6 @@ namespace pre_processing
             //状态码：0（不接触），1(延申到_link)，2（延申到唯一的_main），3（其它）
             int fsc = 1;
             int tsc = 1;
-
-            List<int> lst = new List<int>() { 18, 23, 5 };
-            if (lst.Contains(feature.OID))
-            {
-                Console.WriteLine();
-            }
 
             //沿着feature的polyline前后寻找link道路，将其存储在strokeFeature中，这些道路组合成stroke，
             //如果stroke的两端存在与非link道路的接触，则保留，否则删除
