@@ -31,9 +31,9 @@ namespace pre_processing
         //定义全局变量
         //应该保留下来的道路类型
         static public List<string> roadTypeShouldStay = new List<string>()
-        {"motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link", "secondary", "secondary_link" };
+        {"motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link", "secondary", "secondary_link"};
         static public List<string> linkRoadType = new List<string>() { "motorway_link", "trunk_link", "primary_link", "secondary_link" };
-        static public int roadTypeIndex = -1; //字段“highway”在属性表中的索引
+        static public int roadTypeIndex = -1; //字段“fclass”在属性表中的索引
         static public int linkIndex = -1;
 
         static void Main(string[] args)
@@ -41,10 +41,9 @@ namespace pre_processing
             ESRI.ArcGIS.RuntimeManager.Bind(ESRI.ArcGIS.ProductCode.EngineOrDesktop);
             AoInitializeFirst();
 
-            string inPath = "E:\\桌面\\道路平行性判断\\CityShapeFile\\Hongkong\\highway.shp";
+            string inPath = "E:\\桌面\\双向道属性一致性分析\\CityShapeFile\\Sydney\\highway.shp";
             RemoveRoadByType(inPath);
             RemoveLink(inPath, Strategy.Tree);
-            RemoveLink(inPath, Strategy.Stroke);
             //DeleteLinkLayer(inPath);
         }
 
@@ -69,7 +68,7 @@ namespace pre_processing
 
             IFeatureClass linkFeatClass = CopyFeatureClass(inPath, linkPath); //拷贝要素类
 
-            roadTypeIndex = QueryFieldIndex(linkFeatClass, "highway");
+            roadTypeIndex = QueryFieldIndex(linkFeatClass, "fclass");
             linkIndex = AddField(linkFeatClass, "link", esriFieldType.esriFieldTypeSmallInteger, 1);
 
             //打开编辑器
@@ -105,13 +104,12 @@ namespace pre_processing
             Stopwatch sw = new Stopwatch();
             sw.Start();
 
-            //string inPath = "E:\\桌面\\道路平行性判断\\CityShapeFile\\#test\\hk_island_spf.shp";
             string dir = System.IO.Path.GetDirectoryName(inPath); //可以获得不带文件名的路径
             string name = System.IO.Path.GetFileNameWithoutExtension(inPath); //可以获得文件名
             string linkPath = dir + "\\" + name + "_link.shp";
             string spfPath = null;
             if (strategy == Strategy.Tree)
-                spfPath = dir + "\\" + name + "_spf(Tree).shp";
+                spfPath = dir + "\\" + name + "_spf.shp";
             else if(strategy == Strategy.Stroke)
                 spfPath = dir + "\\" + name + "_spf(Stroke).shp";
 
@@ -120,7 +118,7 @@ namespace pre_processing
 
             IFeatureClass spfFeatClass = CopyFeatureClass(linkPath, spfPath); //拷贝要素类
 
-            roadTypeIndex = QueryFieldIndex(spfFeatClass, "highway");
+            roadTypeIndex = QueryFieldIndex(spfFeatClass, "fclass");
             linkIndex = AddField(spfFeatClass, "link", esriFieldType.esriFieldTypeSmallInteger, 1);
 
             //打开编辑器
@@ -524,9 +522,9 @@ namespace pre_processing
             {
                 string value = stringSet[i];
                 if (i == 0)
-                    whereClause = whereClause + "highway = " + "\'" + value + "\'";
+                    whereClause = whereClause + "fclass = " + "\'" + value + "\'";
                 else
-                    whereClause = whereClause + "OR highway = " + "\'" + value + "\'";
+                    whereClause = whereClause + "OR fclass = " + "\'" + value + "\'";
             }
             return whereClause;
         }
@@ -539,7 +537,7 @@ namespace pre_processing
         static private int QueryFieldIndex(IFeatureClass featClass, string fieldName)
         {
             int fieldIndex = -1;
-            //确定"LC_1"和"LC_1_CC"字段的索引值
+
             for (int i = 0; i < featClass.Fields.FieldCount; i++)
             {
                 if (featClass.Fields.get_Field(i).Name == fieldName)

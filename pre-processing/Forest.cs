@@ -70,9 +70,9 @@ namespace pre_processing
                 if (tree.Size() > 1) //tag有更新
                     GoForward(Posi.FROM, minTreeAngle, ref tree, featClass); //向FROM端延申
 
-                InitTag(Posi.TO, minTreeAngle, ref tree, featClass); //初始化FROM标签
+                InitTag(Posi.TO, minTreeAngle, ref tree, featClass); //初始化TO标签
                 if (tree.Size() > 1) //tag有更新
-                    GoForward(Posi.TO, minTreeAngle, ref tree, featClass); //向FROM端延申
+                    GoForward(Posi.TO, minTreeAngle, ref tree, featClass); //向TO端延申
             }
 
             this.forest.Add(tree);
@@ -149,6 +149,7 @@ namespace pre_processing
                         int id = fea.OID;
                         if (id == leaf.id) continue; //排除自身
                         if(Convert.ToInt32(fea.get_Value(Program.linkIndex)) != 1) continue; //不是link，跳过
+                        if (tree.FindNode(id)) continue;//不能是本树的节点
                         if (num > 2 && GetPolylineAngle(leaf.id, id, featClass) < minTreeAngle) continue; //剪枝
                         IPolyline poly = fea.ShapeCopy as IPolyline;
                         if (GetRel(id, leaf.id, featClass) == Posi.FROM)

@@ -296,6 +296,24 @@ namespace pre_processing
             return ids;
         }
 
+        /// <summary>
+        /// 寻找某节点
+        /// </summary>
+        /// <param name="target_id">目标id</param>
+        public Boolean FindNode(int target_id)
+        {
+            Queue<Node> Q = new Queue<Node>(); //队列
+            Q.Enqueue(this._root); //入队
+            while (Q.Count > 0) //在队列为空之前
+            {
+                Node currNode = Q.Dequeue(); //当前节点
+                if (currNode.id == target_id) return true; //找到节点
+                List<Node> children = currNode.GetChildren(); //获取顶节点的孩子节点
+                if (children != null) { foreach (Node child in children) Q.Enqueue(child); } //有孩子：孩子入栈
+            }
+            Q.Clear(); //释放内存
+            return false;
+        }
 
         /// <summary>
         /// 寻找所有叶子节点

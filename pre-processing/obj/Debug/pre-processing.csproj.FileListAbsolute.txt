@@ -5,3 +5,9 @@ E:\桌面\道路平行性判断\代码\pre-processing\pre-processing\bin\Debug\p
 E:\桌面\道路平行性判断\代码\pre-processing\pre-processing\obj\Debug\pre-processing.csprojResolveAssemblyReference.cache
 E:\桌面\道路平行性判断\代码\pre-processing\pre-processing\obj\Debug\pre-processing.exe
 E:\桌面\道路平行性判断\代码\pre-processing\pre-processing\obj\Debug\pre-processing.pdb
+E:\桌面\双向道属性一致性分析\代码\pre-processing\pre-processing\bin\Debug\pre-processing.exe.config
+E:\桌面\双向道属性一致性分析\代码\pre-processing\pre-processing\obj\Debug\pre-processing.exe
+E:\桌面\双向道属性一致性分析\代码\pre-processing\pre-processing\obj\Debug\pre-processing.pdb
+E:\桌面\双向道属性一致性分析\代码\pre-processing\pre-processing\bin\Debug\pre-processing.exe
+E:\桌面\双向道属性一致性分析\代码\pre-processing\pre-processing\bin\Debug\pre-processing.pdb
+E:\桌面\双向道属性一致性分析\代码\pre-processing\pre-processing\obj\Debug\pre-processing.csprojResolveAssemblyReference.cache
